@@ -1,3 +1,5 @@
+# オブジェクトの枠表示とかできる？
+
 import pyxel
 
 WIDTH, HEIGHT = 128, 128
@@ -10,20 +12,37 @@ BOY_STATUS_DEAD = 1
 SCROLL_BORDER_X = 80
 GRAVITY = 1
 JUMP_VELOCITY = -10
+# CHECK_POINTS = [
+#     (-1, -1),
+#     (16, -1),
+#     (16, 16),
+#     (-1, 16),
+#     (8, -1),
+#     (16, 8),
+#     (8, 16),
+#     (-1, 8),
+# ]
 CHECK_POINTS = [
-    (-1, -1),
-    (16, -1),
-    (16, 16),
-    (-1, 16),
-    (8, -1),
-    (16, 8),
-    (8, 16),
-    (-1, 8),
+    [-1, -1],
+    [16, -1],
+    [16, 16],
+    [-1, 16],
+    [8, -1],
+    [16, 8],
+    [8, 16],
+    [-1, 8],
 ]
 
+# LIFE = 1
+
 scroll_x = 0
+velocity_x = 0
 coins = []
 enemies = []
+# question_blocks = [[48, 32], [64, 32]]
+question_blocks = []
+
+fire = None
 
 
 def get_tile(x, y):
@@ -31,10 +50,26 @@ def get_tile(x, y):
 
 
 def detect_collision(x, y):
-    coll_flags = [False, False, False, False, False, False, False, False]
-    for i, (px, py) in enumerate(CHECK_POINTS):
+    # coll_flags = [False, False, False, False, False, False, False, False]
+    # for i, (px, py) in enumerate(CHECK_POINTS):
+    #     if get_tile((x + px) // 8, (y + py) // 8)[1] == 6:
+    #         coll_flags[i] = True
+    # return coll_flags
+    
+    # coll_flags = []
+    # for (px, py) in CHECK_POINTS:
+    #     if get_tile((x + px) // 8, (y + py) // 8)[1] == 6:
+    #         coll_flags.append(True)
+    #     else:
+    #         coll_flags.append(False)
+    # return coll_flags
+
+    coll_flags = []
+    for [px, py] in CHECK_POINTS:
         if get_tile((x + px) // 8, (y + py) // 8)[1] == 6:
-            coll_flags[i] = True
+            coll_flags.append(True)
+        else:
+            coll_flags.append(False)
     return coll_flags
 
 
@@ -78,14 +113,76 @@ class Coin:
         u = pyxel.frame_count // 3 % 2 * 16
         pyxel.blt(self.x, self.y, 0, u, 64, self.w, self.h, TRANSPARENT_COLOR)
 
+class Fire:
+    def __init__(self, x, y, w=16, h=16):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.time = 0
+
+    def draw(self):
+        pyxel.blt(self.x, self.y, 0, 0, 120, self.w, self.h, TRANSPARENT_COLOR)
+    
+    def check_enemy_collision(self):
+        global fire
+        for enemy in enemies:
+            if (
+                self.x < enemy.x + enemy.w
+                and self.x + self.w > enemy.x
+                and self.y < enemy.y + enemy.h
+                and self.y + self.h > enemy.y
+            ):
+                enemies.remove(enemy)
+                fire = None
+
+    def update(self):
+        global fire
+        self.time += 1
+        if self.time > 10:
+            fire = None
+        else:
+            self.x += 3
+        self.check_enemy_collision()
+
+class QuestionBlock:
+    def __init__(self, x, y, w=16, h=16):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.breaked = False
+    
+    def draw_unbreaked_block(self):
+        pyxel.blt(self.x, self.y, 0, 48, 48, 16, 16, TRANSPARENT_COLOR)
+
+    def draw_breaked_block(self):
+        pyxel.blt(self.x, self.y, 0, 16, 48, 16, 16, TRANSPARENT_COLOR)
+
+    def draw(self):
+        if self.breaked:
+            self.draw_breaked_block()
+        else:
+            self.draw_unbreaked_block()
+
+# class Item:
+
+# class Mushroom(Item):
+
+# class Flower(Item):
+
+
 
 class Boy:
     def __init__(self, x, y, w=16, h=16, score=0):
+        # 書き方
         self.x, self.y, self.w, self.h, self.score = x, y, w, h, score
         self.v_y, self.status, self.jump_status = 0, BOY_STATUS_LIVE, 1
+        self.prev_x, self.prev_y = x, y
 
     def check_coin_collision(self):
         for coin in coins:
+            # 書き方に対する説明足す
             if (
                 self.x < coin.x + coin.w
                 and self.x + self.w > coin.x
@@ -104,16 +201,42 @@ class Boy:
                 and self.y < enemy.y + enemy.h
                 and self.y + self.h > enemy.y
             ):
-                pyxel.play(3, 4)
-                self.status = BOY_STATUS_DEAD
+                if (
+                    self.v_y > 0
+                ):
+                    enemies.remove(enemy)
+                else:
+                    pyxel.play(3, 4)
+                    self.status = BOY_STATUS_DEAD
+    
+    # 当たり判定に関して
+    # https://note.com/syun77/n/n88d78b0957dd
+    def check_question_block_collision(self):
+        for question_block in question_blocks:
+            if (
+                (self.x + self.w / 2) - (question_block.x + question_block.w / 2) < question_block.w / 2
+                and (self.x + self.w / 2) - (question_block.x + question_block.w / 2) > -question_block.w / 2
+                and self.y < question_block.y + question_block.h
+                and self.y + self.h > question_block.y - 1
+            ):
+                if self.prev_y >= question_block.y + question_block.h:
+                    question_blocks.remove(question_block)
+                    
 
     def update(self):
-        global scroll_x
+        # グローバルに関する説明
+        # 引数で処理できない？
+
+        global scroll_x, fire
         if self.status != BOY_STATUS_LIVE:
             return
+        self.prev_x = self.x
+        self.prev_y = self.y
         coll_flags = detect_collision(self.x, self.y)
+        # 条件縦で書いた方がよくね？
         if pyxel.btn(pyxel.KEY_LEFT) and self.x > scroll_x and not coll_flags[7]:
             self.x -= 2
+            # print(2)
         if (
             pyxel.btn(pyxel.KEY_RIGHT)
             and self.x < scroll_x + WIDTH - self.w
@@ -121,6 +244,41 @@ class Boy:
         ):
             self.x += 2
 
+
+        # 慣性つけたVer
+        # global scroll_x, velocity_x
+        # if self.status != BOY_STATUS_LIVE:
+        #     return
+        # coll_flags = detect_collision(self.x, self.y)
+        # if (
+        #     pyxel.btn(pyxel.KEY_RIGHT)
+        #     and self.x < scroll_x + WIDTH - self.w
+        #     and not coll_flags[5]
+        #     and velocity_x < 2
+        # ):
+        #     # self.x += 2
+        #     velocity_x += 0.1
+        # elif (
+        #     pyxel.btn(pyxel.KEY_LEFT) 
+        #     and self.x > scroll_x 
+        #     and not coll_flags[7] 
+        #     and velocity_x > -2
+        # ):
+        #     # self.x -= 2
+        #     velocity_x -= 0.1
+        # else:
+        #     if velocity_x > 0:
+        #         velocity_x -= 0.2
+        #     elif velocity_x < 0:
+        #         velocity_x += 0.2
+        #     if velocity_x < 0.1 and velocity_x > -0.1:
+        #         velocity_x = 0
+        # self.x += velocity_x
+
+        # 物理の話必要？
+        # https://www2.nhk.or.jp/school/watch/clip/?das_id=D0005401443_00000
+        # https://www2.nhk.or.jp/school/watch/clip/?das_id=D0005401452_00000
+        # https://wakariyasui.sakura.ne.jp/p/mech/rakutai/rakkabiseki-img/3121-40-a.gif
         self.v_y += GRAVITY
         new_y = self.y + self.v_y
 
@@ -141,13 +299,23 @@ class Boy:
                     self.y = (self.y // 8 + 1) * 8
                     self.v_y = 0
                     break
-
-        if pyxel.btnp(pyxel.KEY_SPACE) and (coll_flags[2] or coll_flags[3]):
-            self.v_y = JUMP_VELOCITY  # Jump velocity
-            self.jump_status = 1
+        
+        
 
         self.check_coin_collision()
         self.check_enemy_collision()
+        self.check_question_block_collision()
+
+        if pyxel.btnp(pyxel.KEY_SPACE) and (coll_flags[2] or coll_flags[3]):
+            # print("jump")
+            self.v_y = JUMP_VELOCITY  # Jump velocity
+            self.jump_status = 1
+        
+        if pyxel.btnp(pyxel.KEY_F) and (coll_flags[2] or coll_flags[3]):
+            if not fire:
+                fire = Fire(self.x, self.y)
+
+
 
         if self.y > 128:
             self.status = BOY_STATUS_DEAD
@@ -158,7 +326,9 @@ class Boy:
             scroll_x = min(self.x - SCROLL_BORDER_X, 240 * 8)
             spawn_coin(last_scroll_x + 128, scroll_x + 127)
             spawn_enemy(last_scroll_x + 128, scroll_x + 127)
-
+        
+        # print(self.jump_status)
+        
     def draw(self):
         u = 3 * 16 if self.jump_status else pyxel.frame_count // 3 % 2 * 16
         pyxel.blt(self.x, self.y, 0, u, 16, self.w, self.h, TRANSPARENT_COLOR)
@@ -167,6 +337,7 @@ class Boy:
 class Enemy:
     def __init__(self, x, y, w=16, h=16):
         self.x, self.y, self.w, self.h = x, y, w, h
+        # xじゃね？
         self.v_y = 0.5
 
     def update(self):
@@ -229,7 +400,7 @@ class App:
             "fffnn", # エフェクト（n=ノーマル、f=ファーストディケイ）
             10 # スピード
         )
-        pyxel.play(1, 2, loop=True)
+        pyxel.play(1, 4, loop=True)
         self.game_settings()
 
     def game_settings(self):
@@ -237,6 +408,8 @@ class App:
         self.boy = Boy(0, 0)
         spawn_coin(0, 127)
         spawn_enemy(0, 127)
+        question_blocks.append(QuestionBlock(48, 40))
+        question_blocks.append(QuestionBlock(64, 40))
         pyxel.run(self.update, self.draw)
 
     def game_over(self):
@@ -265,7 +438,13 @@ class App:
             self.boy.update()
             for enemy in enemies:
                 enemy.update()
+            # for question_block in question_blocks:
+            #     question_block.update()
+            if fire:
+                fire.update()
             if check_goal(self.boy.x, self.boy.y):
+                # ゴールした際のy座標をスコア化
+                # print(self.boy.y)
                 self.scene = SCENE_RESULT
                 pyxel.stop(0)
                 pyxel.play(1, 2, loop=True)
@@ -294,7 +473,9 @@ class App:
 
     def draw_title_scene(self):
         pyxel.text(scroll_x + 36, 40, "SUPER MAN DASH", 7)
-        pyxel.text(scroll_x + 32, 80, "- START[SPACE] -", 7)
+        # スペース開けた方が読みやすい
+        # 日本語入れたかったらできる？
+        pyxel.text(scroll_x + 28, 80, "- START [ SPACE ] -", 7)
 
     def draw_game_scene(self):
         if self.boy.status == BOY_STATUS_LIVE:
@@ -306,6 +487,12 @@ class App:
             coin.draw()
         for enemy in enemies:
             enemy.draw()
+        for question_block in question_blocks:
+            question_block.draw()
+
+        
+        if fire:
+            fire.draw()
         score_text = "Score:{:>4}".format(self.boy.score)
         pyxel.text(scroll_x + 5, 4, score_text, 7)
 
@@ -330,3 +517,13 @@ class App:
 
 
 App()
+
+
+# class Enemy:
+
+#     def __init__(self, x, y, w=16, h=16, v_x=0.5):
+#         self.x, self.y, self.w, self.h, self.v_x = x, y, w, h, v_x
+
+#     def draw(self):
+#         u = pyxel.frame_count // 6 % 2 * 16
+#         pyxel.blt(self.x, self.y, 0, u, 88, self.w, self.h, TRANSPARENT_COLOR)
