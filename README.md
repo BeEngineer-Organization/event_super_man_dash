@@ -26,5 +26,7 @@ PS> .venv\Scripts\Activate.ps1
 # 実行
 
 ``` console
-(.venv)$ python auto_typing.py
+(.venv)$ python super_man_dash/main.py
 ```
+
+main.pyの他、rewrite.py、sample.pyを用意しています。
